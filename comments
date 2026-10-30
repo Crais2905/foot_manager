@@ -1,0 +1,17 @@
+1) у ChampionshipParticipation питання по _validate_position
+Що робити із протектом якщо його треба в Championship.add_team
+
+2) у ChampionshipParticipation  функції get_teams використовується sorted
+
+3) ID в класі Championship (Та інших) чи взагалі потрібне
+Скоріш за все в подальшому треба буде це видалити
+
+4) Championship._update_position використовується у ChampionshipParticipation
+Протектед метод у сторонньому класі
+
+5) ** Не забути що NationalTeam наслідується від FootballTeam
+
+6) Розібратись краще з !r
+
+7)
+
