@@ -2,6 +2,7 @@ from collections.abc import Iterator
 
 from app.domain.championship_participation import ChampionshipParticipation
 from app.domain.football_team import FootballTeam
+from app.application.sorting.shell_sorter import ShellSorter
 
 
 class Championship:
@@ -14,14 +15,13 @@ class Championship:
     ) -> None:
         values = (name, country, season)
         if not all(isinstance(value, str) for value in values):
-            raise TypeError("Name, country and season must be a string.")
+            raise TypeError("Назва, країна та сезон повинні бути рядками.")
 
         name, country, season = (value.strip() for value in values)
-
         if not name or not country or not season:
-            raise ValueError("Name, country and season cant be empty.")
+            raise ValueError("Назва, країна та сезон не можуть бути порожніми.")
         if id is not None and (type(id) is not int or id < 1):
-            raise ValueError("ID must be positive integer or None.")
+            raise ValueError("ID повинен бути додатним цілим числом або None.")
 
         self.id = id
         self.name = name
@@ -39,14 +39,13 @@ class Championship:
         position: int,
     ) -> ChampionshipParticipation:
         if not isinstance(team, FootballTeam):
-            raise TypeError("Team must be a FootballTeam.")
-
+            raise TypeError("Учасником чемпіонату повинна бути команда FootballTeam.")
         ChampionshipParticipation._validate_position(position)
 
         if any(item.team is team for item in self._participations):
-            raise ValueError("Team has already exist.")
+            raise ValueError("Команда вже бере участь у цьому чемпіонаті.")
         if any(item.position == position for item in self._participations):
-            raise ValueError("This position is already taken.")
+            raise ValueError("Це місце вже зайняте іншою командою.")
 
         participation = ChampionshipParticipation(team, self, position)
         self._participations.append(participation)
@@ -58,8 +57,30 @@ class Championship:
             None,
         )
         if participation is None:
-            raise ValueError("Participation does not belong to this championship.")
+            raise ValueError("Команда не бере участі в цьому чемпіонаті.")
         self._participations.remove(participation)
+
+    def sort_by_position(self) -> list[FootballTeam]:
+        participations = ShellSorter.sort(
+            self._participations,
+            key=lambda participation: participation.position,
+        )
+        return [participation.team for participation in participations]
+
+    def sort_by_coach(self) -> list[FootballTeam]:
+        alphabet = "абвгґдеєжзиіїйклмнопрстуфхцчшщьюя"
+
+        def name_key(name: str) -> tuple[int, ...]:
+            return tuple(alphabet.index(char) if char in alphabet else len(alphabet) + ord(char)
+                         for char in name.casefold())
+
+        return sorted(
+            (participation.team for participation in self._participations),
+            key=lambda team: (
+                name_key(team.coach.last_name),
+                name_key(team.coach.first_name),
+            ),
+        )
 
     def get_teams(self) -> list[FootballTeam]:
         ordered = sorted(self._participations, key=lambda item: item.position)
@@ -74,11 +95,11 @@ class Championship:
 
     def get_teams_by_position_range(self, start: int, end: int) -> list[FootballTeam]:
         if type(start) is not int or type(end) is not int:
-            raise TypeError("Range boundaries must be integers.")
+            raise TypeError("Межі діапазону повинні бути цілими числами.")
         if start < 1 or end < 1:
-            raise ValueError("Range boundaries must be positive.")
+            raise ValueError("Межі діапазону повинні бути додатними.")
         if start > end:
-            raise ValueError("Start of range cannot be greater than end.")
+            raise ValueError("Початок діапазону не може бути більшим за кінець.")
         return [
             item.team
             for item in sorted(self._participations, key=lambda item: item.position)
@@ -87,7 +108,7 @@ class Championship:
 
     def find_team_by_name(self, name: str) -> list[FootballTeam]:
         if not isinstance(name, str):
-            raise TypeError("Name must be a string.")
+            raise TypeError("Назва повинна бути рядком.")
         search_name = name.strip().casefold()
         return [
             item.team for item in self._participations
@@ -96,7 +117,7 @@ class Championship:
 
     def find_team_by_city(self, city: str) -> list[FootballTeam]:
         if not isinstance(city, str):
-            raise TypeError("City must be a string.")
+            raise TypeError("Місто повинно бути рядком.")
         search_city = city.strip().casefold()
         return [
             item.team for item in self._participations
@@ -104,17 +125,17 @@ class Championship:
         ]
 
     def _update_position(
-            self,
-            participation: ChampionshipParticipation,
-            position: int,
+        self,
+        participation: ChampionshipParticipation,
+        position: int,
     ) -> None:
         if participation not in self._participations:
-            raise ValueError("Participation does not belong to this championship.")
+            raise ValueError("Участь не належить цьому чемпіонату.")
         if any(
-                item is not participation and item.position == position
-                for item in self._participations
+            item is not participation and item.position == position
+            for item in self._participations
         ):
-            raise ValueError("This position is already taken")
+            raise ValueError("Це місце вже зайняте іншою командою.")
         participation._position = position
 
     def __iter__(self) -> Iterator[ChampionshipParticipation]:
@@ -124,7 +145,7 @@ class Championship:
         return len(self._participations)
 
     def __str__(self) -> str:
-        return f"{self.name}, {self.country}, season {self.season}"
+        return f"{self.name}, {self.country}, сезон {self.season}"
 
     def __repr__(self) -> str:
         return (
