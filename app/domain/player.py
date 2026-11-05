@@ -1,7 +1,15 @@
+from __future__ import annotations
+
 from datetime import date
+from typing import TYPE_CHECKING
+from weakref import ReferenceType
 
 from app.domain.enums import PlayerPosition
 from app.domain.person import Person
+
+
+if TYPE_CHECKING:
+    from app.domain.team_squad import TeamSquad
 
 
 class Player(Person):
@@ -21,6 +29,7 @@ class Player(Person):
         if type(shirt_number) is not int or not 1 <= shirt_number <= 99:
             raise ValueError("Shirt number must be an integer from 1 to 99.")
 
+        self._club_squad: ReferenceType[TeamSquad] | None = None
         self.position = position
         self.shirt_number = shirt_number
 

@@ -5,6 +5,7 @@ from app.domain.team_squad import TeamSquad
 
 class NationalTeam(FootballTeam):
     MIN_SQUAD_SIZE = 11
+    _exclusive_club_membership = False
 
     def __init__(
         self,

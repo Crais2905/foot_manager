@@ -6,6 +6,8 @@ from app.domain.team_squad import TeamSquad
 
 
 class FootballTeam:
+    _exclusive_club_membership = True
+
     def __init__(
         self,
         name: str,
@@ -32,6 +34,9 @@ class FootballTeam:
         self.city = city
         self.coach = coach
         self.squad = squad if squad is not None else TeamSquad()
+        self.squad._bind_team(
+            self, exclusive_club_membership=self._exclusive_club_membership
+        )
 
     def add_player(self, player: Player) -> None:
         self.squad.add_player(player)

@@ -2,13 +2,18 @@ from enum import Enum
 
 
 class PlayerPosition(Enum):
-    GOALKEEPER = "Goalkeeper"
-    DEFENDER = "Defender"
-    MIDFIELDER = "Midfielder"
-    FORWARD = "Forward"
+    GOALKEEPER = "goalkeeper"
+    DEFENDER = "defender"
+    MIDFIELDER = "midfielder"
+    FORWARD = "forward"
 
     def display_name(self) -> str:
-        return self.value
+        return {
+            self.GOALKEEPER: "Воротар",
+            self.DEFENDER: "Захисник",
+            self.MIDFIELDER: "Півзахисник",
+            self.FORWARD: "Нападник",
+        }[self]
 
     def __str__(self) -> str:
         return self.display_name()

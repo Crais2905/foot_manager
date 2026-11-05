@@ -32,7 +32,7 @@ class Person:
         return f"{self.first_name} {self.last_name}"
 
     def age(self, as_of: date | None = None) -> int:
-        current_date = as_of or date.today()
+        current_date = as_of if as_of is not None else date.today()
         if not isinstance(current_date, date):
             raise TypeError("Age calculation date must be of type date.")
         if current_date < self.date_of_birth:

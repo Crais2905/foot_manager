@@ -26,9 +26,21 @@ class NationalTeamBuilder:
                 if not isinstance(team, FootballTeam):
                     raise TypeError("Клуб повинен бути об'єктом FootballTeam.")
 
-        self.available_players = available_players.copy()
-        self.selected_players: list[Player] = []
-        self.player_teams = player_teams.copy() if player_teams is not None else {}
+        self._available_players = available_players.copy()
+        self._selected_players: list[Player] = []
+        self._player_teams = player_teams.copy() if player_teams is not None else {}
+
+    @property
+    def player_teams(self) -> dict[Player, FootballTeam]:
+        return self._player_teams.copy()
+
+    @property
+    def available_players(self) -> list[Player]:
+        return self._available_players.copy()
+
+    @property
+    def selected_players(self) -> list[Player]:
+        return self._selected_players.copy()
 
     def add_player(self, player: Player) -> None:
         if not isinstance(player, Player):
@@ -37,14 +49,14 @@ class NationalTeamBuilder:
             raise ValueError("Цього гравця немає серед доступних.")
         if player in self.selected_players:
             raise ValueError("Цей гравець уже вибраний.")
-        self.selected_players.append(player)
+        self._selected_players.append(player)
 
     def remove_player(self, player: Player) -> None:
         if not isinstance(player, Player):
             raise TypeError("Потрібно передати об'єкт Player.")
         if player not in self.selected_players:
             raise ValueError("Цього гравця немає серед вибраних.")
-        self.selected_players.remove(player)
+        self._selected_players.remove(player)
 
     def get_selected_players(self) -> list[Player]:
         return self.selected_players.copy()
@@ -89,4 +101,4 @@ class NationalTeamBuilder:
         return national_team
 
     def clear(self) -> None:
-        self.selected_players.clear()
+        self._selected_players.clear()

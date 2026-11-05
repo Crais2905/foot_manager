@@ -1,105 +1,161 @@
+from __future__ import annotations
+
 from datetime import date
-from typing import Optional, List
+from typing import Any
 
-from sqlalchemy import Integer, String, ForeignKey, Date
-from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
+from sqlalchemy import CheckConstraint, Date, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-Base = declarative_base()
+from app.db.base import Base
+from app.db.enums import PlayerPositionEnum
 
 
-class PlayerModel(Base):
-    __tablename__ = 'player'
+class PersonModel(Base):
+    __tablename__ = "persons"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    firstname: Mapped[str] = mapped_column(String(256), nullable=False)
-    lastname: Mapped[str] = mapped_column(String(256), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    first_name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[str] = mapped_column(String(100))
     date_of_birth: Mapped[date] = mapped_column(Date)
-    position: Mapped[str] = mapped_column(String(32), nullable=False)
-    shirt_number: Mapped[int] = mapped_column(Integer, nullable=False)  # Додано Mapped[int]
+    person_type: Mapped[str] = mapped_column(String(20))
 
-    club_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('football_team.id'))
-    national_team_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('nation_team.id'))
-
-    club: Mapped[Optional["FootballTeamModel"]] = relationship("FootballTeamModel", back_populates="players")
-    national_team: Mapped[Optional["NationalTeamModel"]] = relationship("NationalTeamModel", back_populates="players")
+    __mapper_args__ = {"polymorphic_on": person_type, "polymorphic_identity": "person",
+                       "with_polymorphic": "*"}
 
 
-class CoachModel(Base):
-    __tablename__ = 'coach'
+class PlayerModel(PersonModel):
+    __tablename__ = "players"
+    __table_args__ = (CheckConstraint("shirt_number BETWEEN 1 AND 99", name="shirt_number"),)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    firstname: Mapped[str] = mapped_column(String(256), nullable=False)
-    lastname: Mapped[str] = mapped_column(String(256), nullable=False)
-    date_of_birth: Mapped[date] = mapped_column(Date)
-    experience_years: Mapped[int] = mapped_column(Integer, nullable=False)
+    id: Mapped[int] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), primary_key=True)
+    position: Mapped[PlayerPositionEnum] = mapped_column(Enum(
+        PlayerPositionEnum, name="player_position", validate_strings=True,
+        values_callable=lambda enum: [item.value for item in enum],
+        create_constraint=False,
+    ))
+    # Default number for a player without a squad. Actual squad numbers are in squad_players.
+    shirt_number: Mapped[int]
+    squad_memberships: Mapped[list[SquadPlayerModel]] = relationship(
+        back_populates="player", cascade="all, delete-orphan", passive_deletes=True,
+        lazy="selectin",
+    )
+    squads: AssociationProxy[list[TeamSquadModel]] = association_proxy("squad_memberships", "squad")
 
-    club_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('football_team.id'), unique=True)
-    national_team_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('nation_team.id'))
-
-    club: Mapped[Optional["FootballTeamModel"]] = relationship("FootballTeamModel", back_populates="coach")
-    national_team: Mapped[Optional["NationalTeamModel"]] = relationship("NationalTeamModel", back_populates="coach")
-
-
-class BaseTeamModel(Base):
-    __abstract__ = True
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    __mapper_args__ = {"polymorphic_identity": "player"}
 
 
-class FootballTeamModel(BaseTeamModel):
-    __tablename__ = 'football_team'
+class CoachModel(PersonModel):
+    __tablename__ = "coaches"
+    __table_args__ = (CheckConstraint("experience_years >= 0", name="experience_years"),)
 
-    name: Mapped[str] = mapped_column(String(256), nullable=False)
-    city: Mapped[str] = mapped_column(String(256), nullable=False)
+    id: Mapped[int] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), primary_key=True)
+    experience_years: Mapped[int]
+    teams: Mapped[list[FootballTeamModel]] = relationship(
+        back_populates="coach", passive_deletes="all", lazy="selectin",
+    )
 
-    coach: Mapped[Optional["CoachModel"]] = relationship("CoachModel", back_populates="club")
-    players: Mapped[List["PlayerModel"]] = relationship("PlayerModel", back_populates="club", lazy="selectin")
-    participations: Mapped[List["ChampionshipParticipationModel"]] = relationship(
-        "ChampionshipParticipationModel", back_populates="football_team", lazy="selectin"
+    __mapper_args__ = {"polymorphic_identity": "coach"}
+
+
+class FootballTeamModel(Base):
+    __tablename__ = "football_teams"
+    __table_args__: tuple[CheckConstraint, ...] = (
+        CheckConstraint("length(trim(name)) > 0", name="name_nonempty"),
+        CheckConstraint("length(trim(city)) > 0", name="city_nonempty"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(150))
+    city: Mapped[str] = mapped_column(String(100))
+    coach_id: Mapped[int] = mapped_column(ForeignKey("coaches.id", ondelete="RESTRICT"), index=True)
+    team_type: Mapped[str] = mapped_column(String(30))
+    coach: Mapped[CoachModel] = relationship(back_populates="teams", lazy="selectin")
+    squad: Mapped[TeamSquadModel] = relationship(
+        back_populates="team", cascade="all, delete-orphan", single_parent=True,
+        passive_deletes=True, lazy="selectin",
+    )
+    participations: Mapped[list[ChampionshipParticipationModel]] = relationship(
+        back_populates="team", cascade="all, delete-orphan", passive_deletes=True,
+        lazy="selectin",
+    )
+
+    __mapper_args__ = {"polymorphic_on": team_type, "polymorphic_identity": "football_team",
+                       "with_polymorphic": "*"}
+
+    def __init__(self, **kwargs: Any) -> None:
+        # Composition: even an empty team starts with its own squad.
+        kwargs.setdefault("squad", TeamSquadModel())
+        super().__init__(**kwargs)
+
+
+class NationalTeamModel(FootballTeamModel):
+    __tablename__ = "national_teams"
+    __table_args__ = (CheckConstraint("length(trim(country)) > 0", name="country_nonempty"),)
+
+    id: Mapped[int] = mapped_column(ForeignKey("football_teams.id", ondelete="CASCADE"), primary_key=True)
+    country: Mapped[str] = mapped_column(String(100))
+
+    __mapper_args__ = {"polymorphic_identity": "national_team"}
+
+
+class TeamSquadModel(Base):
+    __tablename__ = "team_squads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(
+        ForeignKey("football_teams.id", ondelete="CASCADE"), unique=True,
+    )
+    team: Mapped[FootballTeamModel] = relationship(back_populates="squad")
+    memberships: Mapped[list[SquadPlayerModel]] = relationship(
+        back_populates="squad", cascade="all, delete-orphan", passive_deletes=True,
+        lazy="selectin",
+    )
+    players: AssociationProxy[list[PlayerModel]] = association_proxy(
+        "memberships", "player",
+        creator=lambda player: SquadPlayerModel(player=player, shirt_number=player.shirt_number),
     )
 
 
-class NationalTeamModel(BaseTeamModel):
-    __tablename__ = 'nation_team'
-
-    country: Mapped[str] = mapped_column(String(256), nullable=False)
-
-    coach: Mapped[Optional["CoachModel"]] = relationship("CoachModel", back_populates="national_team")
-    players: Mapped[List["PlayerModel"]] = relationship("PlayerModel", back_populates="national_team", lazy="selectin")
-    participations: Mapped[List["ChampionshipParticipationModel"]] = relationship(
-        "ChampionshipParticipationModel", back_populates="national_team", lazy="selectin"
+class SquadPlayerModel(Base):
+    __tablename__ = "squad_players"
+    __table_args__ = (
+        UniqueConstraint("squad_id", "shirt_number"),
+        CheckConstraint("shirt_number BETWEEN 1 AND 99", name="shirt_number"),
     )
+
+    squad_id: Mapped[int] = mapped_column(ForeignKey("team_squads.id", ondelete="CASCADE"), primary_key=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), primary_key=True, index=True)
+    shirt_number: Mapped[int]
+    squad: Mapped[TeamSquadModel] = relationship(back_populates="memberships")
+    player: Mapped[PlayerModel] = relationship(back_populates="squad_memberships", lazy="selectin")
 
 
 class ChampionshipModel(Base):
-    __tablename__ = 'championship'
+    __tablename__ = "championships"
+    __table_args__ = (UniqueConstraint("name", "country", "season"),)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    title: Mapped[str] = mapped_column(String(256), nullable=False)
-    country: Mapped[str] = mapped_column(String(256), nullable=False)
-    season: Mapped[str] = mapped_column(String(32), nullable=False)
-
-    participations: Mapped[List["ChampionshipParticipationModel"]] = relationship(
-        "ChampionshipParticipationModel", back_populates="championship", lazy="selectin"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(150))
+    country: Mapped[str] = mapped_column(String(100))
+    season: Mapped[str] = mapped_column(String(20))
+    participations: Mapped[list[ChampionshipParticipationModel]] = relationship(
+        back_populates="championship", cascade="all, delete-orphan", passive_deletes=True,
+        lazy="selectin",
     )
 
 
 class ChampionshipParticipationModel(Base):
-    __tablename__ = 'championship_participation'
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-
-    championship_id: Mapped[int] = mapped_column(Integer, ForeignKey('championship.id'))
-    championship: Mapped["ChampionshipModel"] = relationship(
-        "ChampionshipModel", back_populates="participations"
+    __tablename__ = "championship_participations"
+    __table_args__ = (
+        UniqueConstraint("team_id", "championship_id"),
+        UniqueConstraint("championship_id", "position"),
+        CheckConstraint("position > 0", name="position_positive"),
     )
 
-    football_team_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('football_team.id'))
-    football_team: Mapped[Optional["FootballTeamModel"]] = relationship(
-        "FootballTeamModel", back_populates="participations"
-    )
-
-    national_team_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('nation_team.id'))
-    national_team: Mapped[Optional["NationalTeamModel"]] = relationship(
-        "NationalTeamModel", back_populates="participations"
-    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    team_id: Mapped[int] = mapped_column(ForeignKey("football_teams.id", ondelete="CASCADE"), index=True)
+    championship_id: Mapped[int] = mapped_column(ForeignKey("championships.id", ondelete="CASCADE"))
+    position: Mapped[int]
+    team: Mapped[FootballTeamModel] = relationship(back_populates="participations")
+    championship: Mapped[ChampionshipModel] = relationship(back_populates="participations")
