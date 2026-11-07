@@ -1,0 +1,12 @@
+SQLAlchemy<3,>=2.0
+alembic<2,>=1.13
+asyncpg<1,>=0.29
+python-decouple<4,>=3.8
+PySide6<7,>=6.8
+qasync<1,>=0.28
+
+[test]
+pytest<10,>=8
+pytest-asyncio<2,>=1
+mypy<2,>=1.10
+pytest-qt<5,>=4.4

@@ -38,8 +38,8 @@ class FootballTeam:
             self, exclusive_club_membership=self._exclusive_club_membership
         )
 
-    def add_player(self, player: Player) -> None:
-        self.squad.add_player(player)
+    def add_player(self, player: Player, shirt_number: int | None = None) -> None:
+        self.squad.add_player(player, shirt_number)
 
     def remove_player(self, player: Player) -> None:
         self.squad.remove_player(player)

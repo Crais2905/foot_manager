@@ -11,15 +11,24 @@ dependencies = [
     "alembic>=1.13,<2",
     "asyncpg>=0.29,<1",
     "python-decouple>=3.8,<4",
+    "PySide6>=6.8,<7",
+    "qasync>=0.28,<1",
 ]
 
+[project.scripts]
+football-manager = "app.main:main"
+
 [project.optional-dependencies]
-test = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "mypy>=1.10,<2"]
+test = ["pytest>=8,<10", "pytest-asyncio>=1,<2", "mypy>=1.10,<2", "pytest-qt>=4.4,<5"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+"app.presentation" = ["*.qss"]
+
 [tool.pytest.ini_options]
+qt_api = "pyside6"
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -31,4 +40,8 @@ check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["decouple"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["qasync"]
 ignore_missing_imports = true

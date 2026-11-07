@@ -2,6 +2,7 @@ from app.domain.coach import Coach
 from app.domain.football_team import FootballTeam
 from app.domain.national_team import NationalTeam
 from app.domain.player import Player
+from app.domain.squad_membership import SquadMembership
 from app.domain.enums import PlayerPosition
 
 
@@ -28,6 +29,8 @@ class NationalTeamBuilder:
 
         self._available_players = available_players.copy()
         self._selected_players: list[Player] = []
+        self._shirt_numbers: dict[Player, int] = {}
+        self._check_clubs = player_teams is not None
         self._player_teams = player_teams.copy() if player_teams is not None else {}
 
     @property
@@ -42,13 +45,17 @@ class NationalTeamBuilder:
     def selected_players(self) -> list[Player]:
         return self._selected_players.copy()
 
-    def add_player(self, player: Player) -> None:
+    def add_player(self, player: Player, shirt_number: int | None = None) -> None:
         if not isinstance(player, Player):
             raise TypeError("Можна вибирати лише об'єкти Player.")
         if player not in self.available_players:
             raise ValueError("Цього гравця немає серед доступних.")
         if player in self.selected_players:
             raise ValueError("Цей гравець уже вибраний.")
+        membership = SquadMembership(
+            player, player.shirt_number if shirt_number is None else shirt_number
+        )
+        self._shirt_numbers[player] = membership.shirt_number
         self._selected_players.append(player)
 
     def remove_player(self, player: Player) -> None:
@@ -57,25 +64,37 @@ class NationalTeamBuilder:
         if player not in self.selected_players:
             raise ValueError("Цього гравця немає серед вибраних.")
         self._selected_players.remove(player)
+        del self._shirt_numbers[player]
 
     def get_selected_players(self) -> list[Player]:
         return self.selected_players.copy()
 
-    def validate_squad(self) -> bool:
-        players = self.selected_players
+    def has_multiple_clubs(self) -> bool:
+        clubs = {
+            club.id if club.id is not None else club
+            for player in self._selected_players
+            if (club := self._player_teams.get(player)) is not None
+            and not isinstance(club, NationalTeam)
+        }
+        return len(clubs) >= 2
+
+    def validation_errors(self) -> list[str]:
+        players = self._selected_players
+        errors: list[str] = []
         if len(players) < NationalTeam.MIN_SQUAD_SIZE:
-            return False
-        if any(not isinstance(player, Player) for player in players):
-            return False
-        if len(set(players)) != len(players):
-            return False
-        if any(player not in self.available_players for player in players):
-            return False
+            errors.append(
+                f"Вибрано {len(players)} гравців. Потрібно щонайменше {NationalTeam.MIN_SQUAD_SIZE}."
+            )
         if not any(player.position is PlayerPosition.GOALKEEPER for player in players):
-            return False
-        if len({player.shirt_number for player in players}) != len(players):
-            return False
-        return True
+            errors.append("У складі має бути хоча б один воротар.")
+        if len({self._shirt_numbers[player] for player in players}) != len(players):
+            errors.append("Номери футболок у збірній мають бути унікальними.")
+        if self._check_clubs and not self.has_multiple_clubs():
+            errors.append("The squad must represent at least two clubs.")
+        return errors
+
+    def validate_squad(self) -> bool:
+        return not self.validation_errors()
 
     def build(
         self,
@@ -92,13 +111,15 @@ class NationalTeamBuilder:
             raise ValueError("Назва збірної не може бути порожньою.")
         if not isinstance(city, str) or not city.strip():
             raise ValueError("Місто не може бути порожнім.")
-        if not self.validate_squad():
-            raise ValueError("Вибраний склад не відповідає вимогам збірної.")
+        errors = self.validation_errors()
+        if errors:
+            raise ValueError("\n".join(errors))
 
         national_team = NationalTeam(name, city, coach, country)
         for player in self.selected_players:
-            national_team.add_player(player)
+            national_team.add_player(player, self._shirt_numbers[player])
         return national_team
 
     def clear(self) -> None:
         self._selected_players.clear()
+        self._shirt_numbers.clear()

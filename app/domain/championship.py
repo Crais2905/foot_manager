@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from app.common.shell_sorter import ShellSorter
+from app.domain.errors import DomainConflictError
 from app.domain.football_team import FootballTeam
 
 
@@ -43,10 +44,13 @@ class Championship:
             raise TypeError("Учасником чемпіонату повинна бути команда FootballTeam.")
         ChampionshipParticipation._validate_position(position)
 
-        if any(item.team is team for item in self._participations):
-            raise ValueError("Команда вже бере участь у цьому чемпіонаті.")
+        if any(
+            item.team is team or (team.id is not None and item.team.id == team.id)
+            for item in self._participations
+        ):
+            raise DomainConflictError("Команда вже бере участь у цьому чемпіонаті.")
         if any(item.position == position for item in self._participations):
-            raise ValueError("Це місце вже зайняте іншою командою.")
+            raise DomainConflictError("Це місце вже зайняте іншою командою.")
 
         participation = ChampionshipParticipation(team, self, position)
         self._participations.append(participation)
@@ -136,7 +140,7 @@ class Championship:
             item is not participation and item.position == position
             for item in self._participations
         ):
-            raise ValueError("Це місце вже зайняте іншою командою.")
+            raise DomainConflictError("Це місце вже зайняте іншою командою.")
         participation._position = position
 
     def __iter__(self) -> Iterator[ChampionshipParticipation]:

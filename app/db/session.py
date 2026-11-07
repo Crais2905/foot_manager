@@ -25,7 +25,7 @@ def get_database_url() -> str | URL:
     )
 
 
-engine = create_async_engine(get_database_url(), pool_pre_ping=True)
+engine = create_async_engine(get_database_url(), pool_pre_ping=True, hide_parameters=True)
 SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
 
 
